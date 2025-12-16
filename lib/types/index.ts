@@ -319,6 +319,16 @@ export interface UserResponse {
   page_size: number;
 }
 
+// Admin Bulk Upload Types
+export interface AdminBulkUploadResponse {
+  success: boolean;
+  message: string;
+  total_processed?: number;
+  successful_count?: number;
+  failed_count?: number;
+  errors?: string[];
+}
+
 // API Error Types
 export interface ApiError {
   message: string;
