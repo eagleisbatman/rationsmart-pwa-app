@@ -175,6 +175,7 @@ export interface FeedDetails {
   fd_dm?: number;
   fd_ash?: number;
   fd_cp?: number;
+  fd_npn_cp?: number;
   fd_ee?: number;
   fd_st?: number;
   fd_ndf?: number;
@@ -188,6 +189,7 @@ export interface FeedDetails {
   fd_nfe?: number;
   fd_hemicellulose?: number;
   fd_cellulose?: number;
+  fd_season?: string;
   fd_orginin?: string;
   fd_ipb_local_lab?: string;
   created_at?: string;
@@ -302,6 +304,14 @@ export interface AdminFeedResponse {
   page_size: number;
 }
 
+export interface AdminFeedListResponse {
+  feeds: FeedDetails[];
+  total: number;
+  total_pages: number;
+  page: number;
+  page_size: number;
+}
+
 export interface AdminUser {
   id: string;
   name: string;
@@ -322,11 +332,94 @@ export interface UserResponse {
 // Admin Bulk Upload Types
 export interface AdminBulkUploadResponse {
   success: boolean;
-  message: string;
-  total_processed?: number;
-  successful_count?: number;
-  failed_count?: number;
-  errors?: string[];
+  message?: string;
+  total_records: number;
+  successful_uploads: number;
+  failed_uploads: number;
+  updated_records: number;
+  failed_records?: Array<{
+    row: number;
+    reason: string;
+    data?: Record<string, any>;
+  }>;
+  bulk_import_log?: string;
+}
+
+// Admin Export Types
+export interface AdminExportResponse {
+  success: boolean;
+  message?: string;
+  file_url?: string;
+}
+
+// Admin Feedback Types
+export interface AdminFeedbackResponse {
+  id: string;
+  user_id: string;
+  user_name?: string;
+  user_email?: string;
+  feedback_type: string;
+  overall_rating?: number;
+  text_feedback?: string;
+  created_at: string;
+}
+
+export interface FeedbackStatsResponse {
+  total_feedbacks: number;
+  average_rating: number;
+  recent_feedbacks: number;
+  feedback_type_distribution: Record<string, number>;
+  feedback_by_rating?: Record<string, number>;
+}
+
+// Admin Report Types
+export interface AdminReportItem {
+  report_id: string;
+  simulation_id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  report_type: string;
+  bucket_url: string;
+  created_at: string;
+}
+
+export interface AdminGetAllReportsResponse {
+  reports: AdminReportItem[];
+  total: number;
+  total_pages: number;
+  page: number;
+  page_size: number;
+}
+
+// Admin Feed Request Type
+export interface AdminFeedRequest {
+  fd_code?: string | number;
+  fd_name: string;
+  fd_category: string;
+  fd_type: string;
+  fd_country_name: string;
+  fd_country_cd?: string;
+  fd_dm?: number;
+  fd_ash?: number;
+  fd_cp?: number;
+  fd_npn_cp?: number;
+  fd_ee?: number;
+  fd_cf?: number;
+  fd_nfe?: number;
+  fd_st?: number;
+  fd_ndf?: number;
+  fd_hemicellulose?: number;
+  fd_adf?: number;
+  fd_cellulose?: number;
+  fd_lg?: number;
+  fd_ndin?: number;
+  fd_adin?: number;
+  fd_ca?: number;
+  fd_p?: number;
+  fd_season?: string;
+  fd_orginin?: string;
+  fd_ipb_local_lab?: string;
 }
 
 // API Error Types

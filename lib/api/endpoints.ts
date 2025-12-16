@@ -15,7 +15,7 @@ import {
   SubmitFeedbackRequest,
   SubmitFeedbackResponse,
   FeedbackResponse,
-  AdminFeedResponse,
+  AdminFeedListResponse,
   UserResponse,
   Country,
   FeedDetails,
@@ -23,6 +23,8 @@ import {
   FeedCategoryResponse,
   CheckInsertUpdateRequest,
   CheckInsertUpdateResponse,
+  AdminBulkUploadResponse,
+  AdminExportResponse,
 } from "@/lib/types";
 import { apiClient } from "./client";
 
@@ -160,7 +162,7 @@ export const adminApi = {
     feedCategory?: string,
     countryName?: string,
     search?: string
-  ): Promise<AdminFeedResponse> =>
+  ): Promise<AdminFeedListResponse> =>
     apiClient.get("/admin/list-feeds/", {
       params: {
         admin_user_id: adminUserId,
@@ -194,6 +196,77 @@ export const adminApi = {
   ): Promise<any> =>
     apiClient.get("/admin/get-all-reports/", {
       params: { user_id: adminUserId, page, page_size: pageSize },
+    }),
+
+  bulkUploadFeeds: (
+    adminUserId: string,
+    file: File
+  ): Promise<AdminBulkUploadResponse> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.post(`/admin/bulk-upload/?admin_user_id=${adminUserId}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  exportFeeds: (adminUserId: string): Promise<AdminExportResponse> =>
+    apiClient.get("/admin/export-feeds/", {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  exportCustomFeeds: (adminUserId: string): Promise<AdminExportResponse> =>
+    apiClient.get("/admin/export-custom-feeds/", {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  listFeedTypes: (adminUserId: string): Promise<any[]> =>
+    apiClient.get("/admin/feed-types/", {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  addFeedType: (adminUserId: string, data: { type_name: string; description?: string; sort_order?: number }): Promise<any> =>
+    apiClient.post("/admin/feed-types/", data, {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  deleteFeedType: (adminUserId: string, typeId: string): Promise<any> =>
+    apiClient.delete(`/admin/feed-types/${typeId}`, {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  listFeedCategories: (adminUserId: string): Promise<any[]> =>
+    apiClient.get("/admin/feed-categories/", {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  addFeedCategory: (adminUserId: string, data: { category_name: string; feed_type_id: string; description?: string; sort_order?: number }): Promise<any> =>
+    apiClient.post("/admin/feed-categories/", data, {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  deleteFeedCategory: (adminUserId: string, categoryId: string): Promise<any> =>
+    apiClient.delete(`/admin/feed-categories/${categoryId}`, {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  addFeed: (adminUserId: string, data: any): Promise<any> =>
+    apiClient.post("/admin/feeds/", data, {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  updateFeed: (adminUserId: string, feedId: string, data: any): Promise<any> =>
+    apiClient.put(`/admin/feeds/${feedId}`, data, {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  deleteFeed: (adminUserId: string, feedId: string): Promise<any> =>
+    apiClient.delete(`/admin/feeds/${feedId}`, {
+      params: { admin_user_id: adminUserId },
+    }),
+
+  toggleUserStatus: (adminUserId: string, userId: string, data: { is_active: boolean }): Promise<any> =>
+    apiClient.patch(`/admin/users/${userId}/status`, data, {
+      params: { admin_user_id: adminUserId },
     }),
 };
 

@@ -44,19 +44,19 @@ export default function AdminFeedbackPage() {
     try {
       const offset = (page - 1) * pageSize;
       const response = await adminApi.getAllFeedbacks(user.id, 100, 0); // Load more for filtering
-      let filteredFeedbacks = response.feedbacks || [];
-      
+      let filteredFeedbacks: AdminFeedbackResponse[] = response.feedbacks || [];
+
       // Apply filters
       if (filterType !== "all") {
         filteredFeedbacks = filteredFeedbacks.filter(
-          (fb) => fb.feedback_type === filterType
+          (fb: AdminFeedbackResponse) => fb.feedback_type === filterType
         );
       }
-      
+
       if (filterRating !== "all") {
         const ratingNum = parseInt(filterRating);
         filteredFeedbacks = filteredFeedbacks.filter(
-          (fb) => fb.overall_rating === ratingNum
+          (fb: AdminFeedbackResponse) => fb.overall_rating === ratingNum
         );
       }
       
