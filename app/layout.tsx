@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -8,14 +8,17 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-export const metadata: Metadata = {
-  title: "RationSmart - Feed Formulation",
-  description: "Dairy cattle nutrition optimization system",
-  manifest: "/manifest.json",
+export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#1CA069" },
     { media: "(prefers-color-scheme: dark)", color: "#087F23" },
   ],
+};
+
+export const metadata: Metadata = {
+  title: "RationSmart - Feed Formulation",
+  description: "Dairy cattle nutrition optimization system",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

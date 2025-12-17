@@ -1,7 +1,10 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from "axios";
 import { ApiError } from "@/lib/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use proxy in browser to avoid CORS issues, direct URL on server
+const API_BASE_URL = typeof window !== 'undefined'
+  ? '/api/proxy'  // Browser: use Next.js proxy
+  : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");  // Server: direct
 
 class ApiClient {
   private client: AxiosInstance;
