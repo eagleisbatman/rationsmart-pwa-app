@@ -25,8 +25,13 @@ export default defineConfig({
   /* Limit parallel workers to avoid API rate limiting */
   workers: process.env.CI ? 1 : 2,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  /* Output directory for test results */
+  outputDir: './test-results',
   reporter: [
-    ['html', { open: 'never' }],
+    ['html', {
+      outputFolder: './playwright-report',
+      open: 'on-failure'  // Opens automatically after failures
+    }],
     ['json', { outputFile: 'playwright-report/results.json' }],
     ['list'],
   ],
