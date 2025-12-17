@@ -15,7 +15,7 @@ class ApiClient {
       headers: {
         "Content-Type": "application/json",
       },
-      timeout: 30000,
+      timeout: 90000, // Increased for NSGA-II diet recommendation (can take 10+ seconds)
     });
 
     // Request interceptor for auth
