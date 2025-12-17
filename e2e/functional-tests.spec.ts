@@ -235,6 +235,9 @@ test.describe('Functional Tests - Feed Selection', () => {
 });
 
 test.describe('Functional Tests - Diet Recommendation', () => {
+  // Diet recommendation uses NSGA-II algorithm which can take 10+ seconds per call
+  test.setTimeout(120000);
+
   let testUserEmail: string;
   let testUserId: string;
   let testUserPin: string;
@@ -512,6 +515,9 @@ test.describe('Functional Tests - Feedback System', () => {
 });
 
 test.describe('Functional Tests - Reports', () => {
+  // Reports tests may generate recommendations which use NSGA-II algorithm
+  test.setTimeout(120000);
+
   let testUserEmail: string;
   let testUserId: string;
   let testUserPin: string;
