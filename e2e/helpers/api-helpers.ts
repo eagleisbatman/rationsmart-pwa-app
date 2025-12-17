@@ -1,17 +1,28 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.PLAYWRIGHT_API_URL || '';
+// Load environment variables - ensure this happens before any API calls
+dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
+
+/**
+ * Get API base URL from environment
+ */
+function getApiBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_API_URL || process.env.PLAYWRIGHT_API_URL || '';
+}
 
 /**
  * Create API client instance
  */
 export function createApiClient(): AxiosInstance {
-  if (!API_BASE_URL) {
-    throw new Error('API_BASE_URL environment variable is not set');
+  const apiBaseUrl = getApiBaseUrl();
+  if (!apiBaseUrl) {
+    throw new Error('API_BASE_URL environment variable is not set. Make sure .env.local contains NEXT_PUBLIC_API_URL.');
   }
 
   const client = axios.create({
-    baseURL: API_BASE_URL,
+    baseURL: apiBaseUrl,
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json',
@@ -89,7 +100,7 @@ export async function getUserProfile(emailId: string): Promise<any> {
  */
 export async function getCountries(): Promise<any[]> {
   const client = createApiClient();
-  const response = await client.get('/auth/countries/');
+  const response = await client.get('/auth/countries');
   return response.data;
 }
 

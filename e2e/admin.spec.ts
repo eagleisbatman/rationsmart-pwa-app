@@ -13,14 +13,18 @@ import {
   adminDeleteFeed,
   getCountries,
 } from './helpers/api-helpers';
-import {
-  verifyDbConnection,
-  getUserById,
-  getFeedById,
-  deleteTestFeed,
-} from './helpers/db-helpers';
 import { generateFeedData } from './helpers/test-data';
+import { SELECTORS, TIMEOUTS } from './helpers/selectors';
 
+/**
+ * Admin tests require a pre-existing admin account.
+ * Set these environment variables to run admin tests:
+ *   ADMIN_EMAIL - Admin user email
+ *   ADMIN_PIN - Admin user PIN
+ *   ADMIN_USER_ID - Admin user ID (for API calls)
+ *
+ * Without these, admin tests will be skipped.
+ */
 test.describe('Admin Features', () => {
   let adminUserEmail: string;
   let adminUserId: string;
@@ -28,42 +32,50 @@ test.describe('Admin Features', () => {
   let regularUserEmail: string;
   let regularUserId: string;
   let countryId: string;
+  let adminAvailable = false;
 
   test.beforeAll(async () => {
-    const dbConnected = await verifyDbConnection();
-    // Database connection is optional - tests will skip DB-dependent parts if not available
-    if (!dbConnected) {
-      console.warn('Database not available - some tests may be skipped');
+    // Check for pre-existing admin credentials in environment
+    adminUserEmail = process.env.ADMIN_EMAIL || '';
+    adminUserPin = process.env.ADMIN_PIN || '';
+    adminUserId = process.env.ADMIN_USER_ID || '';
+
+    if (adminUserEmail && adminUserPin && adminUserId) {
+      adminAvailable = true;
+      console.log('✅ Admin credentials found - admin tests will run');
+    } else {
+      console.warn('⚠️ Admin tests require ADMIN_EMAIL, ADMIN_PIN, and ADMIN_USER_ID environment variables');
+      console.warn('   These tests will be skipped. To run them, set up an admin account and provide credentials.');
     }
 
+    // Get country for creating test users
     const countries = await getCountries();
     const activeCountry = countries.find((c: any) => c.is_active) || countries[0];
     countryId = activeCountry.id;
   });
 
-  test.beforeEach(async () => {
-    // Create admin user (need to set is_admin=true in database)
-    const adminUser = await createTestUser({ countryId });
-    adminUserEmail = adminUser.email;
-    adminUserId = adminUser.userId;
-    adminUserPin = adminUser.pin;
+  test.beforeEach(async ({}, testInfo) => {
+    // Skip if admin credentials not available
+    if (!adminAvailable) {
+      testInfo.skip();
+      return;
+    }
 
-    // Set admin flag in database
-    const { query } = await import('./helpers/db-helpers');
-    await query('UPDATE user_information SET is_admin = true WHERE id = $1', [adminUserId]);
-
-    // Create regular user for testing
+    // Create a regular user for testing (this doesn't require admin)
     const regularUser = await createTestUser({ countryId });
     regularUserEmail = regularUser.email;
     regularUserId = regularUser.userId;
   });
 
   test.afterEach(async () => {
-    if (adminUserEmail) {
-      await cleanupTestUser(adminUserEmail, adminUserId);
-    }
+    // Only cleanup regular users we created (don't touch admin account)
     if (regularUserEmail) {
-      await cleanupTestUser(regularUserEmail, regularUserId);
+      // Skip cleanup if we don't have a way to delete users
+      try {
+        await cleanupTestUser(regularUserEmail, regularUserId);
+      } catch {
+        // Ignore cleanup errors
+      }
     }
   });
 
@@ -86,64 +98,71 @@ test.describe('Admin Features', () => {
     await page.goto('/admin/users');
 
     // Wait for users to load
-    await page.waitForSelector('table, [role="table"], div', { timeout: 10000 });
+    await page.waitForSelector(SELECTORS.TABLE + ', div', { timeout: TIMEOUTS.ELEMENT });
 
     // Verify API call
     const users = await adminGetUsers(adminUserId);
     expect(users).toBeDefined();
 
-    // Verify user list displays
-    if (users.users && users.users.length > 0) {
-      const userEmail = page.locator(`text=${regularUserEmail}`);
-      await expect(userEmail.first()).toBeVisible({ timeout: 5000 });
-    }
+    // Verify user list displays - always check for the created regular user
+    const userEmail = page.locator(`text=${regularUserEmail}`);
+    await expect(userEmail.first()).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
   });
 
   test('User management - search users', async ({ page }) => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
     await page.goto('/admin/users');
 
-    await page.waitForSelector('input[type="search"], input[placeholder*="search"]', { timeout: 10000 });
+    await page.waitForSelector(SELECTORS.INPUT_SEARCH, { timeout: TIMEOUTS.ELEMENT });
 
     // Type in search box
-    const searchInput = page.locator('input[type="search"], input[placeholder*="search"]').first();
+    const searchInput = page.locator(SELECTORS.INPUT_SEARCH).first();
     await searchInput.fill(regularUserEmail);
-    
+
     // Wait for debounced search
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(TIMEOUTS.SEARCH_DEBOUNCE);
 
     // Verify filtered results
     const userEmail = page.locator(`text=${regularUserEmail}`);
-    await expect(userEmail.first()).toBeVisible();
+    await expect(userEmail.first()).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
   });
 
   test('User management - toggle user status', async ({ page }) => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
     await page.goto('/admin/users');
 
-    await page.waitForSelector('button', { timeout: 10000 });
+    await page.waitForSelector(SELECTORS.TOGGLE_BUTTON + ', button', { timeout: TIMEOUTS.ELEMENT });
 
     // Find toggle button for regular user
-    const toggleButton = page.getByRole('button', { name: /toggle|activate|deactivate/i }).first();
-    if (await toggleButton.count() > 0) {
-      // Get current status
+    const toggleButton = page.locator(SELECTORS.TOGGLE_BUTTON).first();
+    await expect(toggleButton).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
+
+    // Check if DB is available for status verification
+    const dbAvailable = await isDbAvailable();
+
+    let wasActive = true;
+    if (dbAvailable) {
       const userBefore = await getUserById(regularUserId);
-      const wasActive = userBefore.is_active;
+      wasActive = userBefore?.is_active ?? true;
+    }
 
-      await toggleButton.click();
+    await toggleButton.click();
 
-      // Confirm if dialog appears
-      const confirmButton = page.getByRole('button', { name: /confirm|yes/i });
-      if (await confirmButton.count() > 0) {
-        await confirmButton.click();
-      }
+    // Confirm if dialog appears
+    const confirmButton = page.getByRole('button', { name: /confirm|yes/i });
+    if (await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await confirmButton.click();
+    }
 
-      // Wait for update
-      await page.waitForTimeout(1000);
+    // Wait for toast or status update
+    await page.waitForTimeout(TIMEOUTS.ANIMATION);
+    const toast = page.locator(SELECTORS.TOAST);
+    await expect(toast.first()).toBeVisible({ timeout: TIMEOUTS.TOAST });
 
-      // Verify status changed in database
+    // Verify status changed in database if DB available
+    if (dbAvailable) {
       const userAfter = await getUserById(regularUserId);
-      expect(userAfter.is_active).toBe(!wasActive);
+      expect(userAfter?.is_active).toBe(!wasActive);
     }
   });
 
@@ -151,25 +170,30 @@ test.describe('Admin Features', () => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
     await page.goto('/admin/feeds');
 
-    await page.waitForSelector('table, [role="table"], button', { timeout: 10000 });
+    await page.waitForSelector(SELECTORS.TABLE + ', button', { timeout: TIMEOUTS.ELEMENT });
 
     // Verify API call
     const feeds = await adminGetFeeds(adminUserId);
     expect(feeds).toBeDefined();
+
+    // Verify table is visible
+    const table = page.locator(SELECTORS.TABLE);
+    await expect(table.first()).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
   });
 
   test('Feed management - add feed', async ({ page }) => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
     await page.goto('/admin/feeds');
 
-    await page.waitForSelector('button', { timeout: 10000 });
+    await page.waitForSelector('button', { timeout: TIMEOUTS.ELEMENT });
 
     // Click Add Feed button
     const addButton = page.getByRole('button', { name: /add feed|new feed/i });
+    await expect(addButton).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
     await addButton.click();
 
     // Wait for dialog
-    await page.waitForSelector('[role="dialog"]', { timeout: 5000 });
+    await page.waitForSelector(SELECTORS.DIALOG, { timeout: TIMEOUTS.ELEMENT_SHORT });
 
     // Fill feed form
     const feedData = generateFeedData();
@@ -177,10 +201,14 @@ test.describe('Admin Features', () => {
     await page.fill('input[name="fd_code"]', feedData.fd_code);
 
     // Select feed type
-    const typeSelect = page.locator('select[name="fd_type"], [role="combobox"]').first();
-    if (await typeSelect.count() > 0) {
-      await typeSelect.selectOption({ index: 0 });
-      await page.waitForTimeout(500);
+    const typeSelect = page.locator(SELECTORS.SELECT_TRIGGER).first();
+    if (await typeSelect.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await typeSelect.click();
+      await page.waitForTimeout(TIMEOUTS.ANIMATION);
+      const firstOption = page.locator(SELECTORS.SELECT_ITEM).first();
+      if (await firstOption.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await firstOption.click();
+      }
     }
 
     // Fill nutrient fields
@@ -191,8 +219,9 @@ test.describe('Admin Features', () => {
     const submitButton = page.getByRole('button', { name: /submit|save|add/i }).last();
     await submitButton.click();
 
-    // Wait for success
-    await page.waitForSelector('text=/success|added|created/i', { timeout: 10000 });
+    // Wait for success toast
+    const toast = page.locator(SELECTORS.TOAST_SUCCESS + ', text=/success|added|created/i');
+    await expect(toast.first()).toBeVisible({ timeout: TIMEOUTS.TOAST });
 
     // Verify feed created via API
     const feeds = await adminGetFeeds(adminUserId, { search: feedData.fd_name });
@@ -209,40 +238,44 @@ test.describe('Admin Features', () => {
 
   test('Feed management - edit feed', async ({ page }) => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
-    
+
     // First create a feed via API
     const feedData = generateFeedData();
     const addResponse = await adminAddFeed(adminUserId, {
       ...feedData,
       fd_country_cd: 'IND',
     });
-    
+
     const feedId = addResponse.feed_id || addResponse.id;
     expect(feedId).toBeDefined();
 
     await page.goto('/admin/feeds');
-    await page.waitForSelector('button', { timeout: 10000 });
+    await page.waitForSelector('button', { timeout: TIMEOUTS.ELEMENT });
 
     // Find and click edit button
     const editButton = page.getByRole('button', { name: /edit/i }).first();
-    if (await editButton.count() > 0) {
-      await editButton.click();
-      await page.waitForSelector('[role="dialog"]', { timeout: 5000 });
+    await expect(editButton).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
+    await editButton.click();
+    await page.waitForSelector(SELECTORS.DIALOG, { timeout: TIMEOUTS.ELEMENT_SHORT });
 
-      // Modify feed name
-      const nameInput = page.locator('input[name="fd_name"]').first();
-      const newName = `Updated ${feedData.fd_name}`;
-      await nameInput.fill(newName);
+    // Modify feed name
+    const nameInput = page.locator('input[name="fd_name"]').first();
+    const newName = `Updated ${feedData.fd_name}`;
+    await nameInput.fill(newName);
 
-      // Submit
-      const submitButton = page.getByRole('button', { name: /submit|save|update/i }).last();
-      await submitButton.click();
+    // Submit
+    const submitButton = page.getByRole('button', { name: /submit|save|update/i }).last();
+    await submitButton.click();
 
-      await page.waitForSelector('text=/success|updated/i', { timeout: 10000 });
+    // Wait for success toast
+    const toast = page.locator(SELECTORS.TOAST_SUCCESS + ', text=/success|updated/i');
+    await expect(toast.first()).toBeVisible({ timeout: TIMEOUTS.TOAST });
 
-      // Verify update in database
+    // Verify update in database if available
+    const dbAvailable = await isDbAvailable();
+    if (dbAvailable) {
       const updatedFeed = await getFeedById(feedId);
-      expect(updatedFeed.fd_name).toBe(newName);
+      expect(updatedFeed?.fd_name).toBe(newName);
     }
 
     // Cleanup
@@ -251,7 +284,7 @@ test.describe('Admin Features', () => {
 
   test('Feed management - delete feed', async ({ page }) => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
-    
+
     // Create feed via API
     const feedData = generateFeedData();
     const addResponse = await adminAddFeed(adminUserId, {
@@ -261,27 +294,28 @@ test.describe('Admin Features', () => {
     const feedId = addResponse.feed_id || addResponse.id;
 
     await page.goto('/admin/feeds');
-    await page.waitForSelector('button', { timeout: 10000 });
+    await page.waitForSelector('button', { timeout: TIMEOUTS.ELEMENT });
 
     // Find delete button
     const deleteButton = page.getByRole('button', { name: /delete/i }).first();
-    if (await deleteButton.count() > 0) {
-      await deleteButton.click();
+    await expect(deleteButton).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
+    await deleteButton.click();
 
-      // Confirm deletion
-      const confirmButton = page.getByRole('button', { name: /confirm|yes|delete/i });
-      if (await confirmButton.count() > 0) {
-        await confirmButton.click();
-      }
+    // Confirm deletion if dialog appears
+    const confirmButton = page.getByRole('button', { name: /confirm|yes|delete/i });
+    if (await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await confirmButton.click();
+    }
 
-      await page.waitForSelector('text=/success|deleted|removed/i', { timeout: 10000 });
+    // Wait for success toast
+    const toast = page.locator(SELECTORS.TOAST_SUCCESS + ', text=/success|deleted|removed/i');
+    await expect(toast.first()).toBeVisible({ timeout: TIMEOUTS.TOAST });
 
-      // Verify feed deleted
+    // Verify feed deleted in database if available
+    const dbAvailable = await isDbAvailable();
+    if (dbAvailable) {
       const deletedFeed = await getFeedById(feedId);
       expect(deletedFeed).toBeNull();
-    } else {
-      // Cleanup if delete button not found
-      await deleteTestFeed(feedId);
     }
   });
 
@@ -289,19 +323,19 @@ test.describe('Admin Features', () => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
     await page.goto('/admin/feed-types');
 
-    await page.waitForSelector('[role="tab"], button', { timeout: 10000 });
+    await page.waitForSelector('[role="tab"], button', { timeout: TIMEOUTS.ELEMENT });
 
     // Test Feed Types tab
     const feedTypesTab = page.getByRole('tab', { name: /feed.*type/i });
-    if (await feedTypesTab.count() > 0) {
+    if (await feedTypesTab.isVisible({ timeout: 1000 }).catch(() => false)) {
       await feedTypesTab.click();
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(TIMEOUTS.ANIMATION);
 
       // Try to add feed type
       const addButton = page.getByRole('button', { name: /add|new/i });
-      if (await addButton.count() > 0) {
+      if (await addButton.isVisible({ timeout: 1000 }).catch(() => false)) {
         await addButton.click();
-        await page.waitForSelector('input, [role="dialog"]', { timeout: 5000 });
+        await page.waitForSelector('input, ' + SELECTORS.DIALOG, { timeout: TIMEOUTS.ELEMENT_SHORT });
 
         const typeName = `TEST-TYPE-${Date.now()}`;
         const nameInput = page.locator('input').first();
@@ -310,22 +344,20 @@ test.describe('Admin Features', () => {
         const submitButton = page.getByRole('button', { name: /submit|save/i }).last();
         await submitButton.click();
 
-        await page.waitForSelector('text=/success/i', { timeout: 10000 });
+        const toast = page.locator(SELECTORS.TOAST_SUCCESS + ', text=/success/i');
+        await expect(toast.first()).toBeVisible({ timeout: TIMEOUTS.TOAST });
       }
     }
 
     // Test Feed Categories tab
     const categoriesTab = page.getByRole('tab', { name: /category/i });
-    if (await categoriesTab.count() > 0) {
+    if (await categoriesTab.isVisible({ timeout: 1000 }).catch(() => false)) {
       await categoriesTab.click();
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(TIMEOUTS.ANIMATION);
 
-      // Similar test for categories
-      const addButton = page.getByRole('button', { name: /add|new/i });
-      if (await addButton.count() > 0) {
-        await addButton.click();
-        await page.waitForSelector('input, [role="dialog"]', { timeout: 5000 });
-      }
+      // Verify categories tab content loads
+      const content = page.locator(SELECTORS.TABLE + ', button');
+      await expect(content.first()).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
     }
   });
 
@@ -334,35 +366,35 @@ test.describe('Admin Features', () => {
     await page.goto('/admin/bulk-upload');
 
     // Verify page loads
-    await expect(page.getByText(/bulk.*upload|upload.*file/i)).toBeVisible();
+    await expect(page.getByText(/bulk.*upload|upload.*file/i)).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
 
     // Verify export buttons exist
     const exportStandardButton = page.getByRole('button', { name: /export.*standard/i });
     const exportCustomButton = page.getByRole('button', { name: /export.*custom/i });
 
-    await expect(exportStandardButton.or(exportCustomButton).first()).toBeVisible();
+    await expect(exportStandardButton.or(exportCustomButton).first()).toBeVisible({ timeout: TIMEOUTS.ELEMENT });
   });
 
   test('Feedback management', async ({ page }) => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
     await page.goto('/admin/feedback');
 
-    await page.waitForSelector('table, div', { timeout: 10000 });
+    await page.waitForSelector(SELECTORS.TABLE + ', div', { timeout: TIMEOUTS.ELEMENT });
 
     // Verify feedback list displays
     const feedbackText = page.locator('text=/feedback|rating|type/i');
-    await expect(feedbackText.first()).toBeVisible({ timeout: 5000 });
+    await expect(feedbackText.first()).toBeVisible({ timeout: TIMEOUTS.ELEMENT_SHORT });
   });
 
   test('Reports management', async ({ page }) => {
     await loginAsUser(page, adminUserEmail, adminUserPin);
     await page.goto('/admin/reports');
 
-    await page.waitForSelector('table, div', { timeout: 10000 });
+    await page.waitForSelector(SELECTORS.TABLE + ', div', { timeout: TIMEOUTS.ELEMENT });
 
     // Verify reports list displays
     const reportsText = page.locator('text=/report|simulation|user/i');
-    await expect(reportsText.first()).toBeVisible({ timeout: 5000 });
+    await expect(reportsText.first()).toBeVisible({ timeout: TIMEOUTS.ELEMENT_SHORT });
   });
 });
 

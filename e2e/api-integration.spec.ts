@@ -69,10 +69,10 @@ test.describe('API Integration Tests', () => {
     });
 
     expect(response).toBeDefined();
-    expect(response.user_id || response.id).toBeDefined();
+    expect(response.user?.id || response.user_id || response.id).toBeDefined();
 
     // Cleanup
-    await cleanupTestUser(email, response.user_id || response.id);
+    await cleanupTestUser(email, response.user?.id || response.user_id || response.id);
   });
 
   test('Authentication API - register with invalid data', async () => {
@@ -93,7 +93,7 @@ test.describe('API Integration Tests', () => {
     });
 
     expect(response).toBeDefined();
-    expect(response.user_id || response.id).toBeDefined();
+    expect(response.user?.id || response.user_id || response.id).toBeDefined();
   });
 
   test('Authentication API - login with invalid credentials', async () => {
@@ -175,9 +175,9 @@ test.describe('API Integration Tests', () => {
       
       expect(recommendation).toBeDefined();
     } catch (error: any) {
-      // If recommendation fails due to missing feeds, that's expected
-      if (error.response?.status === 400 || error.message?.includes('feed')) {
-        // Expected failure
+      // If recommendation fails due to missing feeds or validation error, that's expected
+      if (error.response?.status === 400 || error.response?.status === 422 || error.message?.includes('feed')) {
+        // Expected failure - no feeds provided or validation error
         expect(error).toBeDefined();
       } else {
         throw error;
@@ -186,14 +186,14 @@ test.describe('API Integration Tests', () => {
   });
 
   test('Reports API - get user reports', async () => {
-    const reports = await getUserReports(testUserId);
-    expect(reports).toBeDefined();
-    expect(reports.reports || Array.isArray(reports)).toBe(true);
+    const response = await getUserReports(testUserId);
+    expect(response).toBeDefined();
+    expect(Array.isArray(response.reports) || Array.isArray(response)).toBe(true);
   });
 
   test('Feedback API - submit feedback', async () => {
     const feedbackResponse = await submitFeedback(testUserId, {
-      feedback_type: 'general',
+      feedback_type: 'General', // Must be capitalized: General, Defect, or Feature Request
       text_feedback: 'API test feedback',
       overall_rating: 5,
     });

@@ -1,6 +1,7 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 
 let pool: Pool | null = null;
+let dbConnectionStatus: boolean | null = null;
 
 /**
  * Get or create database connection pool
@@ -47,9 +48,65 @@ export async function verifyDbConnection(): Promise<boolean> {
 }
 
 /**
- * Delete a test user by email
+ * Check if database is available (cached result)
+ * Use this to gracefully skip DB-dependent tests
  */
-export async function deleteTestUser(email: string): Promise<void> {
+export async function isDbAvailable(): Promise<boolean> {
+  if (dbConnectionStatus === null) {
+    dbConnectionStatus = await verifyDbConnection();
+    if (!dbConnectionStatus) {
+      console.warn('⚠️ Database unavailable - DB tests will be skipped');
+    }
+  }
+  return dbConnectionStatus;
+}
+
+/**
+ * Reset DB connection status (useful for retrying)
+ */
+export function resetDbConnectionStatus(): void {
+  dbConnectionStatus = null;
+}
+
+/**
+ * Delete a test user by email (and optionally by ID for reliability)
+ */
+export async function deleteTestUser(email: string, userId?: string): Promise<void> {
+  // If userId provided, delete by ID first (more reliable)
+  if (userId) {
+    try {
+      // Delete related data by user ID first
+      try {
+        await query('DELETE FROM user_feedback WHERE user_id = $1', [userId]);
+      } catch (error: any) {
+        if (error.code !== '42P01') {
+          console.warn(`Failed to delete user_feedback for userId ${userId}:`, error.message);
+        }
+      }
+
+      try {
+        await query('DELETE FROM diet_reports WHERE user_id = $1', [userId]);
+      } catch (error: any) {
+        if (error.code !== '42P01') {
+          console.warn(`Failed to delete diet_reports for userId ${userId}:`, error.message);
+        }
+      }
+
+      try {
+        await query('DELETE FROM reports WHERE user_id = $1', [userId]);
+      } catch (error: any) {
+        // Ignore silently
+      }
+
+      await query('DELETE FROM user_information WHERE id = $1', [userId]);
+    } catch (error: any) {
+      if (error.code !== '42P01') {
+        console.warn(`Failed to delete test user by ID ${userId}:`, error.message);
+      }
+    }
+  }
+
+  // Also clean up by email as fallback
   try {
     // First delete related data (handle missing tables gracefully)
     try {
@@ -63,7 +120,7 @@ export async function deleteTestUser(email: string): Promise<void> {
         console.warn(`Failed to delete user_feedback for ${email}:`, error.message);
       }
     }
-    
+
     try {
       // Try diet_reports table (actual table name in database)
       await query(`
@@ -76,7 +133,7 @@ export async function deleteTestUser(email: string): Promise<void> {
         console.warn(`Failed to delete diet_reports for ${email}:`, error.message);
       }
     }
-    
+
     // Also try reports table if it exists
     try {
       await query(`
@@ -89,7 +146,7 @@ export async function deleteTestUser(email: string): Promise<void> {
         // Ignore silently
       }
     }
-    
+
     // Then delete user
     await query('DELETE FROM user_information WHERE email_id = $1', [email]);
   } catch (error: any) {

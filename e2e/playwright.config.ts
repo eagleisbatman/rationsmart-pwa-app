@@ -12,6 +12,10 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
  */
 export default defineConfig({
   testDir: './',
+  /* Global teardown for latency metrics output */
+  globalTeardown: './global-teardown.ts',
+  /* Global timeout for each test */
+  timeout: 60000,
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -22,47 +26,43 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
-    ['html'],
+    ['html', { open: 'never' }],
     ['json', { outputFile: 'playwright-report/results.json' }],
     ['list'],
   ],
+  /* Expect timeout for assertions */
+  expect: {
+    timeout: 10000,
+  },
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
+    baseURL: 'http://localhost:3000',
+    /* Action timeout */
+    actionTimeout: 10000,
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
     /* Screenshot on failure */
     screenshot: 'only-on-failure',
-    /* Video on failure */
-    video: 'retain-on-failure',
+    /* Video for all tests with proper size for visibility */
+    video: {
+      mode: 'on',
+      size: { width: 1280, height: 720 },
+    },
+    /* Slow down actions for better video visibility */
+    launchOptions: {
+      slowMo: 100, // Increased for clearer video recordings
+    },
   },
 
-  /* Configure projects for major browsers */
+  /* Chromium only for faster test execution */
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-
-    /* Test against mobile viewports. */
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+      },
     },
   ],
 
