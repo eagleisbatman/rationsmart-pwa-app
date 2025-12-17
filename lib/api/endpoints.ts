@@ -107,6 +107,18 @@ export const reportApi = {
 
   saveReport: (data: SaveReportRequest): Promise<SavedReportResponse> =>
     apiClient.post("/save-report/", data),
+
+  // Generate and save PDF report to backend
+  generatePdfReport: (
+    simulationId: string,
+    userId: string,
+    apiResponse: any
+  ): Promise<any> =>
+    apiClient.post(`/generate-pdf-report/?simulation_id=${simulationId}&user_id=${userId}`, apiResponse),
+
+  // Get user's PDF reports
+  getUserPdfReports: (userId: string): Promise<any> =>
+    apiClient.get(`/pdf-reports/${userId}`),
 };
 
 // Feedback endpoints

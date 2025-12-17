@@ -98,26 +98,32 @@ export default function RecommendationPage() {
   };
 
   const handleSaveReport = async () => {
-    if (!recommendation?.report_info?.report_id || !user) {
+    if (!recommendation || !user) {
       toast.error("Unable to save report");
       return;
     }
 
     setSaving(true);
     try {
-      const response = await reportApi.saveReport({
-        report_id: recommendation.report_info.report_id,
-        user_id: user.id,
-      });
+      const simulationId = recommendation.report_info?.simulation_id || `sim_${Date.now()}`;
+
+      // Use generate-pdf-report endpoint which saves the full recommendation
+      const response = await reportApi.generatePdfReport(
+        simulationId,
+        user.id,
+        recommendation
+      );
 
       if (response.success) {
-        toast.success("Report saved successfully!");
+        toast.success("Report saved to your account!");
         setSaved(true);
       } else {
-        toast.error(response.error_message || "Failed to save report");
+        // Fallback: offer client-side PDF download if backend save fails
+        toast.error("Could not save to server. Use 'Download PDF' instead.");
       }
     } catch (error: any) {
-      toast.error(error.message || "Failed to save report");
+      console.error("Save report error:", error);
+      toast.error("Could not save to server. Use 'Download PDF' instead.");
     } finally {
       setSaving(false);
     }
