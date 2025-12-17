@@ -31,12 +31,18 @@ export default function RecommendationPage() {
   const [evaluation, setEvaluation] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
   useEffect(() => {
-    if (cattleInfo && selectedFeeds.length > 0 && user) {
+    // Check for valid data: breed must be set (not empty default), feeds selected, and user logged in
+    const hasValidCattleInfo = cattleInfo && cattleInfo.breed && cattleInfo.breed.length > 0;
+    const hasFeeds = selectedFeeds.length > 0;
+
+    if (hasValidCattleInfo && hasFeeds && user && !hasGenerated && !loading) {
+      setHasGenerated(true);
       generateRecommendation();
     }
-  }, []);
+  }, [cattleInfo, selectedFeeds, user, hasGenerated, loading]);
 
   const generateRecommendation = async () => {
     if (!user || !cattleInfo || selectedFeeds.length === 0) {
@@ -55,13 +61,28 @@ export default function RecommendationPage() {
         user_id: user.id,
       };
 
-      const [recResult, evalResult] = await Promise.all([
+      // Use Promise.allSettled to handle partial failures
+      // Recommendation may succeed even if evaluation fails
+      const [recResult, evalResult] = await Promise.allSettled([
         recommendationApi.getRecommendation(recommendationData),
         recommendationApi.getEvaluation(recommendationData),
       ]);
 
-      setRecommendation(recResult);
-      setEvaluation(evalResult);
+      // Handle recommendation result
+      if (recResult.status === 'fulfilled') {
+        setRecommendation(recResult.value);
+      } else {
+        console.error("Recommendation failed:", recResult.reason);
+        toast.error(recResult.reason?.message || "Failed to generate recommendation");
+      }
+
+      // Handle evaluation result (optional - may fail)
+      if (evalResult.status === 'fulfilled') {
+        setEvaluation(evalResult.value);
+      } else {
+        console.warn("Evaluation failed (optional):", evalResult.reason);
+        // Don't show error toast for evaluation - it's optional
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to generate recommendation");
     } finally {
