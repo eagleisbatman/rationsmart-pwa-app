@@ -97,48 +97,14 @@ export default function RecommendationPage() {
     }
   };
 
-  const handleSaveReport = async () => {
-    if (!recommendation || !user) {
-      toast.error("Unable to save report");
-      return;
-    }
-
-    setSaving(true);
+  // Client-side PDF generation helper
+  const generateClientPDF = async (): Promise<boolean> => {
     try {
-      const simulationId = recommendation.report_info?.simulation_id || `sim_${Date.now()}`;
-
-      // Use generate-pdf-report endpoint which saves the full recommendation
-      const response = await reportApi.generatePdfReport(
-        simulationId,
-        user.id,
-        recommendation
-      );
-
-      if (response.success) {
-        toast.success("Report saved to your account!");
-        setSaved(true);
-      } else {
-        // Fallback: offer client-side PDF download if backend save fails
-        toast.error("Could not save to server. Use 'Download PDF' instead.");
-      }
-    } catch (error: any) {
-      console.error("Save report error:", error);
-      toast.error("Could not save to server. Use 'Download PDF' instead.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDownloadPDF = async () => {
-    setDownloading(true);
-    try {
-      // Dynamic import to reduce bundle size
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).default;
 
       if (!reportRef.current) {
-        toast.error("Unable to generate PDF");
-        return;
+        return false;
       }
 
       const canvas = await html2canvas(reportRef.current, {
@@ -160,13 +126,81 @@ export default function RecommendationPage() {
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
       pdf.save(`feed-recommendation-${recommendation?.report_info?.report_id || 'report'}.pdf`);
 
-      toast.success("PDF downloaded successfully!");
+      return true;
     } catch (error) {
-      console.error("PDF generation error:", error);
-      toast.error("Failed to generate PDF. Please try again.");
-    } finally {
-      setDownloading(false);
+      console.error("Client PDF generation error:", error);
+      return false;
     }
+  };
+
+  const handleSaveReport = async () => {
+    if (!recommendation?.report_info?.report_id || !user) {
+      toast.error("Unable to save report");
+      return;
+    }
+
+    setSaving(true);
+    const reportId = recommendation.report_info.report_id;
+
+    // Backend generates PDF asynchronously after recommendation
+    // We need to retry a few times to allow the background task to complete
+    const maxRetries = 3;
+    const retryDelay = 5000; // 5 seconds between retries
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          toast.info(`Waiting for report to be ready... (attempt ${attempt}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+
+        const response = await reportApi.saveReport({
+          report_id: reportId,
+          user_id: user.id,
+        });
+
+        if (response.success) {
+          toast.success("Report saved to your account!");
+          setSaved(true);
+          setSaving(false);
+          return; // Success - exit
+        } else if (response.message?.includes("not found") && attempt < maxRetries) {
+          // Report not ready yet - will retry
+          continue;
+        } else {
+          // Other error or last attempt - fallback to client-side PDF
+          break;
+        }
+      } catch (error: any) {
+        console.error(`Save report attempt ${attempt} failed:`, error);
+        if (attempt === maxRetries) {
+          break; // Last attempt failed
+        }
+        // Will retry
+      }
+    }
+
+    // Backend failed after retries - fallback to client-side PDF
+    toast.info("Server save unavailable. Generating PDF locally...");
+    const success = await generateClientPDF();
+    if (success) {
+      toast.success("PDF downloaded successfully!");
+      setSaved(true);
+    } else {
+      toast.error("Failed to generate PDF");
+    }
+    setSaving(false);
+  };
+
+  const handleDownloadPDF = async () => {
+    setDownloading(true);
+    const success = await generateClientPDF();
+    if (success) {
+      toast.success("PDF downloaded successfully!");
+    } else {
+      toast.error("Failed to generate PDF. Please try again.");
+    }
+    setDownloading(false);
   };
 
   if (loading) {
