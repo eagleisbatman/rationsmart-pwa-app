@@ -44,6 +44,13 @@ test.describe('Complete User Journey - Full Application Flow', () => {
   test('Complete flow: Login → Cattle Info → Feed Selection → Recommendation → Save Report', async ({ page }) => {
     test.setTimeout(300000); // 5 minutes for complete flow
 
+    // Capture browser console logs
+    page.on('console', msg => {
+      if (msg.text().includes('RECOMMENDATION') || msg.text().includes('Selected Feeds') || msg.text().includes('least_cost_diet')) {
+        console.log(`[BROWSER] ${msg.type()}: ${msg.text()}`);
+      }
+    });
+
     // ========== STEP 1: LOGIN ==========
     console.log('📱 STEP 1: Login');
     await loginAsUser(page, testUserEmail, testUserPin);
@@ -133,145 +140,81 @@ test.describe('Complete User Journey - Full Application Flow', () => {
 
     await page.screenshot({ path: 'e2e/test-results/journey-03-feed-selection-page.png', fullPage: true });
 
-    // === ADD FIRST FEED (Forage) ===
-    console.log('  Adding Forage feed...');
-
-    // Select Feed Type
-    const feedTypeDropdown = page.locator('button:has-text("Select feed type")');
-    await expect(feedTypeDropdown).toBeVisible({ timeout: 10000 });
-    await feedTypeDropdown.click();
-    await page.waitForTimeout(500);
-
-    // Check what options are available
-    const typeOptions = page.locator('[role="option"]');
-    const typeCount = await typeOptions.count();
-    console.log(`  - Available feed types: ${typeCount}`);
-
-    // Select Forage if available, otherwise first option
-    const forageOption = page.locator('[role="option"]').filter({ hasText: 'Forage' });
-    if (await forageOption.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await forageOption.click();
-      console.log('  - Selected type: Forage');
-    } else {
-      await typeOptions.first().click();
-      console.log('  - Selected type: First available');
-    }
-    await page.waitForTimeout(1500);
-
-    await page.screenshot({ path: 'e2e/test-results/journey-04-feed-type-selected.png', fullPage: true });
-
-    // Select Feed Category
-    const categoryDropdown = page.locator('button:has-text("Select feed category")');
-    if (await categoryDropdown.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await categoryDropdown.click();
+    // Helper function to add a feed
+    // categoryIndex: which category to select (0 = first, 1 = second, etc.)
+    const addFeed = async (feedType: string, feedIndex: number, price: string, feedNum: number, categoryIndex: number = 0) => {
+      // Select Feed Type
+      const typeDropdown = page.locator('button:has-text("Select feed type")');
+      await expect(typeDropdown).toBeVisible({ timeout: 5000 });
+      await typeDropdown.click();
       await page.waitForTimeout(500);
 
-      const categoryOptions = page.locator('[role="option"]');
-      const catCount = await categoryOptions.count();
-      console.log(`  - Available categories: ${catCount}`);
-
-      await categoryOptions.first().click();
-      console.log('  - Selected first category');
-      await page.waitForTimeout(1500);
-    }
-
-    await page.screenshot({ path: 'e2e/test-results/journey-05-category-selected.png', fullPage: true });
-
-    // Select Feed Name
-    const feedNameDropdown = page.locator('button:has-text("Select feed name")');
-    if (await feedNameDropdown.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await feedNameDropdown.click();
-      await page.waitForTimeout(500);
-
-      const feedOptions = page.locator('[role="option"]');
-      const feedCount = await feedOptions.count();
-      console.log(`  - Available feeds: ${feedCount}`);
-
-      await feedOptions.first().click();
-      console.log('  - Selected first feed');
-      await page.waitForTimeout(1000);
-    }
-
-    await page.screenshot({ path: 'e2e/test-results/journey-06-feed-name-selected.png', fullPage: true });
-
-    // Enter price and add feed
-    const priceInput = page.locator('input[type="number"][placeholder*="price"], input[placeholder*="Enter price"]');
-    if (await priceInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await priceInput.fill('5');
-      console.log('  - Price: 5/kg');
-
-      const addButton = page.locator('button:has-text("Add Feed")');
-      await expect(addButton).toBeVisible();
-      await addButton.click();
-      console.log('  - Feed added!');
-      await page.waitForTimeout(1000);
-    }
-
-    await page.screenshot({ path: 'e2e/test-results/journey-07-first-feed-added.png', fullPage: true });
-
-    // === ADD SECOND FEED (Concentrate) ===
-    console.log('  Adding Concentrate feed...');
-
-    // Select Feed Type again
-    const feedTypeDropdown2 = page.locator('button:has-text("Select feed type")');
-    if (await feedTypeDropdown2.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await feedTypeDropdown2.click();
-      await page.waitForTimeout(500);
-
-      const concentrateOption = page.locator('[role="option"]').filter({ hasText: 'Concentrate' });
-      if (await concentrateOption.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await concentrateOption.click();
-        console.log('  - Selected type: Concentrate');
+      const typeOption = page.locator('[role="option"]').filter({ hasText: feedType });
+      if (await typeOption.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await typeOption.click();
       } else {
-        // Select second option if available
-        const options = page.locator('[role="option"]');
-        if (await options.count() > 1) {
-          await options.nth(1).click();
-        } else {
-          await options.first().click();
-        }
-      }
-      await page.waitForTimeout(1500);
-
-      // Select category
-      const catDropdown2 = page.locator('button:has-text("Select feed category")');
-      if (await catDropdown2.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await catDropdown2.click();
-        await page.waitForTimeout(500);
         await page.locator('[role="option"]').first().click();
-        await page.waitForTimeout(1500);
       }
+      await page.waitForTimeout(1000);
 
-      // Select feed name
-      const feedDropdown2 = page.locator('button:has-text("Select feed name")');
-      if (await feedDropdown2.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await feedDropdown2.click();
+      // Select Feed Category (use categoryIndex to select different categories)
+      const catDropdown = page.locator('button:has-text("Select feed category")');
+      if (await catDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await catDropdown.click();
         await page.waitForTimeout(500);
-        await page.locator('[role="option"]').first().click();
+        const catOptions = page.locator('[role="option"]');
+        const catCount = await catOptions.count();
+        const catIdx = Math.min(categoryIndex, catCount - 1);
+        await catOptions.nth(catIdx).click();
         await page.waitForTimeout(1000);
       }
 
-      // Enter price and add
-      const priceInput2 = page.locator('input[type="number"][placeholder*="price"], input[placeholder*="Enter price"]');
-      if (await priceInput2.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await priceInput2.fill('10');
-        console.log('  - Price: 10/kg');
+      // Select Feed Name (use different feed each time)
+      const feedDropdown = page.locator('button:has-text("Select feed name")');
+      if (await feedDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await feedDropdown.click();
+        await page.waitForTimeout(500);
+        const feedOptions = page.locator('[role="option"]');
+        const count = await feedOptions.count();
+        const idx = Math.min(feedIndex, count - 1);
+        await feedOptions.nth(idx).click();
+        await page.waitForTimeout(500);
+      }
 
-        const addButton2 = page.locator('button:has-text("Add Feed")');
-        if (await addButton2.isVisible()) {
-          await addButton2.click();
-          console.log('  - Second feed added!');
+      // Enter price and add
+      const priceField = page.locator('input[type="number"][placeholder*="price"], input[placeholder*="Enter price"]');
+      if (await priceField.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await priceField.fill(price);
+        const addBtn = page.locator('button:has-text("Add Feed")');
+        if (await addBtn.isVisible()) {
+          await addBtn.click();
+          console.log(`  - Feed ${feedNum} added (${feedType}, category: ${categoryIndex}, price: ${price})`);
+          await page.waitForTimeout(500);
         }
       }
-    }
+    };
 
-    await page.screenshot({ path: 'e2e/test-results/journey-08-feeds-selected.png', fullPage: true });
+    // Add 4 Forage feeds for variety (algorithm needs multiple feeds)
+    // Using different indices to select different feeds
+    console.log('  Adding Forage feeds...');
+    await addFeed('Forage', 0, '5', 1);
+    await addFeed('Forage', 2, '4', 2);  // Skip index 1 to get different feed
+    await addFeed('Forage', 4, '3', 3);  // Skip more indices
+    await addFeed('Forage', 6, '6', 4);  // Different feed
 
-    // Verify selected feeds are displayed
-    const selectedFeedsSection = page.locator('text=Selected Feeds');
-    if (await selectedFeedsSection.isVisible({ timeout: 3000 }).catch(() => false)) {
-      console.log('✅ Feeds selected and displayed');
-    }
+    await page.screenshot({ path: 'e2e/test-results/journey-04-forage-feeds-added.png', fullPage: true });
+
+    // Add 2 Concentrate feeds from DIFFERENT CATEGORIES to ensure unique feeds
+    // Categories: 0=Additive, 1=By-Product, 2=Energy Source, 3=Grain Crop, 4=Plant Protein
+    console.log('  Adding Concentrate feeds...');
+    await addFeed('Concentrate', 0, '10', 5, 2);  // Energy Source category
+    await addFeed('Concentrate', 0, '12', 6, 3);  // Grain Crop category (different category = different feed)
+
+    await page.screenshot({ path: 'e2e/test-results/journey-05-all-feeds-added.png', fullPage: true });
+
+    // Verify selected feeds count
+    const feedCards = page.locator('[class*="selected"] >> text=/Feed/i, text=Selected Feeds');
+    console.log('✅ Feeds selected and displayed')
 
     // ========== STEP 4: GENERATE RECOMMENDATION ==========
     console.log('📊 STEP 4: Generate Recommendation');

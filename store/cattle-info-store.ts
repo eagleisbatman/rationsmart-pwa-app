@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { CattleInfo } from "@/lib/types";
 
 interface CattleInfoState {
@@ -26,10 +27,17 @@ const defaultCattleInfo: Partial<CattleInfo> = {
   topography: "",
 };
 
-export const useCattleInfoStore = create<CattleInfoState>((set) => ({
-  cattleInfo: defaultCattleInfo,
-  setCattleInfo: (info) =>
-    set((state) => ({ cattleInfo: { ...state.cattleInfo, ...info } })),
-  reset: () => set({ cattleInfo: defaultCattleInfo }),
-}));
+export const useCattleInfoStore = create<CattleInfoState>()(
+  persist(
+    (set) => ({
+      cattleInfo: defaultCattleInfo,
+      setCattleInfo: (info) =>
+        set((state) => ({ cattleInfo: { ...state.cattleInfo, ...info } })),
+      reset: () => set({ cattleInfo: defaultCattleInfo }),
+    }),
+    {
+      name: "cattle-info-storage",
+    }
+  )
+);
 

@@ -386,9 +386,9 @@ export default function RecommendationPage() {
                   {least_cost_diet.map((feed: any, index: number) => (
                     <TableRow key={index}>
                       <TableCell className="font-medium">{feed.feed_name || feed.name || `Feed ${index + 1}`}</TableCell>
-                      <TableCell className="text-right">{feed.quantity?.toFixed(2) || feed.amount?.toFixed(2) || "N/A"}</TableCell>
-                      <TableCell className="text-right">{feed.dm_intake?.toFixed(2) || "N/A"}</TableCell>
-                      <TableCell className="text-right">₹{feed.cost?.toFixed(2) || feed.price?.toFixed(2) || "N/A"}</TableCell>
+                      <TableCell className="text-right">{feed.quantity_kg_per_day?.toFixed(2) || feed.quantity?.toFixed(2) || "N/A"}</TableCell>
+                      <TableCell className="text-right">{feed.dm_intake?.toFixed(2) || "-"}</TableCell>
+                      <TableCell className="text-right">₹{feed.daily_cost?.toFixed(2) || feed.cost?.toFixed(2) || "N/A"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
